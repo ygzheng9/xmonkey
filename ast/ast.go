@@ -22,6 +22,14 @@ type Expression interface {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// 总体结构
+// input 会被解析成 1 个 program；
+// 1 个 program 中有多个 statements；
+// 每个 statement 只有三种类型： let, return, expression
+// 注意，expression 也是一种 statement；
+// 每个 expression 有 5 种类型：literal, integer, boolean, prefix, infix
+
+////////////////////////////////////////////////////////////////////////////////
 // the whole program
 type Program struct {
 	Statements []Statement
@@ -46,7 +54,7 @@ func (p *Program) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// statement: let foobar = "hahaha";
+// statement1: let foobar = "hahaha";
 type LetStatement struct {
 	// the token.LET token
 	Token token.Token
@@ -76,7 +84,7 @@ func (ls *LetStatement) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// statement: return bar("a", "b");
+// statement2: return bar("a", "b");
 type ReturnStatement struct {
 	// the token.RETURN token
 	Token       token.Token
@@ -103,7 +111,7 @@ func (rs *ReturnStatement) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// expression
+// statement3: expression
 type ExpressionStatement struct {
 	// the first token of the expression
 	Token           token.Token
@@ -124,7 +132,7 @@ func (r *ExpressionStatement) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// expression: foobar
+// expression1: literal foobar
 type Identifier struct {
 	// the token.IDENT token
 	Token token.Token
@@ -141,7 +149,7 @@ func (i *Identifier) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// expression: 5
+// expression2: integer 5
 type IntegerLiteral struct {
 	Token token.Token
 	Value int64
@@ -157,7 +165,18 @@ func (r *IntegerLiteral) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// prefix expression
+// expression3: boolean
+type Boolean struct {
+	Token token.Token
+	Value bool
+}
+
+func (b *Boolean) expressionNode()      {}
+func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
+func (b *Boolean) String() string       { return b.Token.Literal }
+
+////////////////////////////////////////////////////////////////////////////////
+// expression4: prefix
 type PrefixExpression struct {
 	Token    token.Token
 	Operator string
@@ -180,9 +199,8 @@ func (r *PrefixExpression) String() string {
 	return out.String()
 }
 
-//
 ////////////////////////////////////////////////////////////////////////////////
-// infix expression
+// expression5: infix
 type InfixExpression struct {
 	Token    token.Token
 	Left     Expression
@@ -206,14 +224,3 @@ func (r *InfixExpression) String() string {
 
 	return out.String()
 }
-
-////////////////////////////////////////////////////////////////////////////////
-// literal: boolean
-type Boolean struct {
-	Token token.Token
-	Value bool
-}
-
-func (b *Boolean) expressionNode()      {}
-func (b *Boolean) TokenLiteral() string { return b.Token.Literal }
-func (b *Boolean) String() string       { return b.Token.Literal }

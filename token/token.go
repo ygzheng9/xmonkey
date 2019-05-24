@@ -47,6 +47,8 @@ const (
 	RETURN   = "RETURN"
 )
 
+// keywords mean something predefined(a subset of identifier),
+// true/false is also keywords
 var keywords = map[string]TokenType{
 	"fn":     FUNCTION,
 	"let":    LET,
