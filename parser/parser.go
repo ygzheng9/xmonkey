@@ -30,6 +30,7 @@ var precedences = map[token.TokenType]int{
 	token.MINUS:    SUM,
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
+	token.LPAREN:   CALL,
 }
 
 type (
@@ -57,10 +58,16 @@ func New(l *lexer.Lexer) *Parser {
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
-	p.registerPrefix(token.BANG, p.parsePrefixExpression)
-	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
+
+	p.registerPrefix(token.BANG, p.parsePrefixExpression)
+	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
+
+	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
+	p.registerPrefix(token.IF, p.parseIfExpression)
+
+	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
@@ -71,6 +78,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.NOT_EQ, p.parseInfixExpression)
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
+
+	p.registerInfix(token.LPAREN, p.parseCallExpression)
 
 	p.nextToken()
 	p.nextToken()
@@ -143,13 +152,14 @@ func (p *Parser) ParseProgram() *ast.Program {
 
 	// 这里是循环，一直到遇到了 EOF，也即：处理完 input
 	for p.curToken.Type != token.EOF {
+		// 解析 statement，在解析过程中，会不断读取 token，并根据当前 token 做不同的逻辑处理
 		stmt := p.parseStatement()
 
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
 		}
 
-		// 读取下一个 token，也即消耗 input
+		// 读取下一个 token，即消耗 input
 		p.nextToken()
 	}
 
@@ -170,7 +180,31 @@ func (p *Parser) parseStatement() ast.Statement {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// statement1: let
+// 这里是 statement，不是 expression；
+// 和 parseProgram 逻辑是一样的，内部是 statements
+func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	block := &ast.BlockStatement{Token: p.curToken}
+	block.Statements = []ast.Statement{}
+
+	p.nextToken()
+
+	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+		stmt := p.parseStatement()
+
+		if stmt != nil {
+			block.Statements = append(block.Statements, stmt)
+		}
+
+		p.nextToken()
+	}
+
+	return block
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// statement1: let foobar = 123;
+// let is fixed chars;
+// foobar is identifier, = is skipped, 123 is integer, ; is ignored(skipped)
 func (p *Parser) parseLetStatement() *ast.LetStatement {
 	stmt := &ast.LetStatement{Token: p.curToken}
 
@@ -181,12 +215,18 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 
 	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 
+	// if expectPeek return true, it will call nextToken, means move curToken to =
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
 	}
 
-	// TODO: will replace later on
-	for !p.curTokenIs(token.SIMICOLON) {
+	// move curToken to the right of =
+	p.nextToken()
+
+	stmt.Value = p.parseExpression(LOWEST)
+
+	// skip ; if any at the end
+	for p.peekTokenIs(token.SIMICOLON) {
 		p.nextToken()
 	}
 
@@ -199,8 +239,9 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 
 	p.nextToken()
 
-	// TODO: skip expressions for now
-	for !p.curTokenIs(token.SIMICOLON) {
+	stmt.ReturnValue = p.parseExpression(LOWEST)
+
+	for p.peekTokenIs(token.SIMICOLON) {
 		p.nextToken()
 	}
 
@@ -221,7 +262,7 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	// 一个 statement 只会执行一次，并且 Token 等于第一个 token
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
 
-	// 以 LOWEST 为开始，表示还是解析 expression
+	// 以 LOWEST 为开始，表示开始解析 expression
 	stmt.ExpressionValue = p.parseExpression(LOWEST)
 
 	if p.peekTokenIs(token.SIMICOLON) {
@@ -340,7 +381,137 @@ func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
 }
 
-// prefix-4
+// prefix-4 处理小括号
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	p.nextToken()
+
+	exp := p.parseExpression(LOWEST)
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return exp
+}
+
+// prefix-5 if ( condition ) { consequence } else  { alternative }
+func (p *Parser) parseIfExpression() ast.Expression {
+	expr := &ast.IfExpression{Token: p.curToken}
+
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	p.nextToken()
+	expr.Condition = p.parseExpression(LOWEST)
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	expr.Consequence = p.parseBlockStatement()
+
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
+
+		if !p.expectPeek(token.LBRACE) {
+			return nil
+		}
+
+		expr.Alternative = p.parseBlockStatement()
+	}
+
+	return expr
+}
+
+// expression: fn(a, b) { a + b; }
+func (p *Parser) parseFunctionLiteral() ast.Expression {
+	fn := &ast.FunctionLiteral{Token: p.curToken}
+
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	fn.Parameters = p.parseFunctionParameters()
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	fn.Body = p.parseBlockStatement()
+
+	return fn
+}
+
+func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+	identifiers := []*ast.Identifier{}
+
+	//  没有参数
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return identifiers
+	}
+
+	// 第一个参数
+	p.nextToken()
+
+	ident := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	identifiers = append(identifiers, ident)
+
+	for p.peekTokenIs(token.COMMA) {
+		//  后续参数
+		p.nextToken()
+		p.nextToken()
+		ident := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		identifiers = append(identifiers, ident)
+	}
+
+	// 参数的右括号
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return identifiers
+}
+
+func (p *Parser) parseCallExpression(fn ast.Expression) ast.Expression {
+	expr := &ast.CallExpression{Token: p.curToken, Function: fn}
+
+	expr.Arguments = p.parseCallArguments()
+
+	return expr
+}
+
+func (p *Parser) parseCallArguments() []ast.Expression {
+	args := []ast.Expression{}
+
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return args
+	}
+
+	p.nextToken()
+	args = append(args, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		args = append(args, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return args
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// prefixFn 有很多，不仅仅是这一个，上面的都是，只是这个碰巧名字中含有 prefix, 处理 ! -  单目前缀运算符
 func (p *Parser) parsePrefixExpression() ast.Expression {
 	nestLevel++
 	fmt.Printf("%sPrefix >> curToken=%q\n", leading(), p.curToken)
@@ -366,7 +537,7 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// infix-1
+// 中缀运算符 infix
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	nestLevel++
 	fmt.Printf("%sInfix >> curToken=%q\n", leading(), p.curToken)

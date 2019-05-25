@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"strings"
 
 	"xmonkey/token"
 )
@@ -47,6 +48,27 @@ func (p *Program) String() string {
 	var out bytes.Buffer
 
 	for _, s := range p.Statements {
+		out.WriteString(s.String())
+	}
+
+	return out.String()
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// statement: block statement
+// ATTENTION: why statement not expression
+// 和 program 是一样的，内部有多个 statements
+type BlockStatement struct {
+	Token      token.Token
+	Statements []Statement
+}
+
+func (r *BlockStatement) statementNode()       {}
+func (r *BlockStatement) TokenLiteral() string { return r.Token.Literal }
+func (r *BlockStatement) String() string {
+	var out bytes.Buffer
+
+	for _, s := range r.Statements {
 		out.WriteString(s.String())
 	}
 
@@ -220,6 +242,88 @@ func (r *InfixExpression) String() string {
 	out.WriteString(r.Left.String())
 	out.WriteString(r.Operator)
 	out.WriteString(r.Right.String())
+	out.WriteString(")")
+
+	return out.String()
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// expression: if-then-else
+type IfExpression struct {
+	Token       token.Token
+	Condition   Expression
+	Consequence *BlockStatement
+	Alternative *BlockStatement
+}
+
+func (r *IfExpression) expressionNode() {}
+func (r *IfExpression) TokenLiteral() string {
+	return r.Token.Literal
+}
+
+func (r *IfExpression) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("if")
+	out.WriteString(r.Condition.String())
+	out.WriteString(" ")
+	out.WriteString(r.Consequence.String())
+
+	if r.Alternative != nil {
+		out.WriteString("else ")
+		out.WriteString(r.Alternative.String())
+	}
+
+	return out.String()
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// expression: fn def
+type FunctionLiteral struct {
+	Token      token.Token
+	Parameters []*Identifier
+	Body       *BlockStatement
+}
+
+func (r *FunctionLiteral) expressionNode()      {}
+func (r *FunctionLiteral) TokenLiteral() string { return r.Token.Literal }
+func (r *FunctionLiteral) String() string {
+	var out bytes.Buffer
+
+	params := []string{}
+	for _, p := range r.Parameters {
+		params = append(params, p.String())
+	}
+
+	out.WriteString(r.TokenLiteral())
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") ")
+	out.WriteString(r.Body.String())
+
+	return out.String()
+}
+
+// expression: fn call
+type CallExpression struct {
+	Token     token.Token
+	Function  Expression
+	Arguments []Expression
+}
+
+func (r *CallExpression) expressionNode()      {}
+func (r *CallExpression) TokenLiteral() string { return r.Token.Literal }
+func (r *CallExpression) String() string {
+	var out bytes.Buffer
+
+	args := []string{}
+	for _, p := range r.Arguments {
+		args = append(args, p.String())
+	}
+
+	out.WriteString(r.Function.String())
+	out.WriteString("(")
+	out.WriteString(strings.Join(args, ","))
 	out.WriteString(")")
 
 	return out.String()
