@@ -32,7 +32,9 @@ func testEval(input string) object.Object {
 	p := parser.New(l)
 	program := p.ParseProgram()
 
-	return Eval(program)
+	env := object.NewEnvironment()
+
+	return Eval(program, env)
 }
 
 func testIntegerObject(t *testing.T, obj object.Object, expected int64) bool {
@@ -173,6 +175,7 @@ func TestErrorHandling(t *testing.T) {
 		{"-true; ", "unknown operator: -BOOLEAN"},
 		{"true + false", "unknown operator: BOOLEAN + BOOLEAN"},
 		{"if (10 > 1) { true - false}", "unknown operator: BOOLEAN - BOOLEAN"},
+		{"foobar", "identifier not found: foobar"},
 	}
 
 	for _, tt := range tests {
@@ -188,4 +191,87 @@ func TestErrorHandling(t *testing.T) {
 			t.Errorf("wrong error message. expected=%q, got=%q", tt.expected, errObj.Message)
 		}
 	}
+}
+
+func TestLetStatement(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"let a = 5; a;", 5},
+		{"let a = 5 * 5; a;", 25},
+		{"let a = 5; let b = a; let c = a + b + 10; c;", 20},
+	}
+
+	for _, tt := range tests {
+		testIntegerObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestFunctionDef(t *testing.T) {
+	input := `fn(x) { x + 2; };`
+
+	evaluated := testEval(input)
+	fn, ok := evaluated.(*object.Function)
+	if !ok {
+		t.Fatalf("object is not Function def. got=%T (%+v)", evaluated, evaluated)
+	}
+
+	if len(fn.Parameters) != 1 {
+		t.Fatalf("parameters len is wrong. got=%d, want=1", len(fn.Parameters))
+	}
+
+	if fn.Parameters[0].String() != "x" {
+		t.Fatalf("param1 is wrong. got=%s, want=x", fn.Parameters[0])
+	}
+
+	expectedBody := "(x+2)"
+
+	if fn.Body.String() != expectedBody {
+		t.Fatalf("body is not %q. got=%q", expectedBody, fn.Body.String())
+	}
+}
+
+func TestFunctionApplicaiton(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"let f = fn(x) { x }; f(5); ", 5},
+		{"let f = fn(x) { return x; }; f(10); ", 10},
+		{"let double=fn(x) { 2 * x }; double(3); ", 6},
+		{"let add=fn(x, y) {x + y}; add(1+2, 3*4); ", 15},
+	}
+
+	for _, tt := range tests {
+		testIntegerObject(t, testEval(tt.input), tt.expected)
+	}
+}
+
+func TestClosure(t *testing.T) {
+	input := `
+let adder = fn(x) {
+    fn(y) { x + y}
+}
+
+let addTwo = adder(2)
+
+addTwo(5);
+
+`
+
+	testIntegerObject(t, testEval(input), 7)
+}
+
+func TestCompound(t *testing.T) {
+	input := `
+let add = fn(a, b) { a + b }
+let sub = fn(a, b) { a - b }
+let apply = fn(a, b, f) { f(a, b) }
+
+apply(2, 5, add);
+
+`
+
+	testIntegerObject(t, testEval(input), 7)
 }

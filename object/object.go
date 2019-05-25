@@ -1,6 +1,11 @@
 package object
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+	"strings"
+	"xmonkey/ast"
+)
 
 type ObjectType string
 
@@ -10,6 +15,7 @@ const (
 	NULL_OBJ         = "NULL"
 	RETURN_VALUE_OBJ = "RETURN_VALUE"
 	ERROR_OBJ        = "ERROR"
+	FUNCTION_OBJ     = "FUNCTION"
 )
 
 type Object interface {
@@ -59,4 +65,29 @@ type Error struct {
 func (r *Error) Type() ObjectType { return ERROR_OBJ }
 func (r *Error) Inspect() string {
 	return "ERROR: " + r.Message
+}
+
+type Function struct {
+	Parameters []*ast.Identifier
+	Body       *ast.BlockStatement
+	Env        *Environment
+}
+
+func (r *Function) Type() ObjectType { return FUNCTION_OBJ }
+func (r *Function) Inspect() string {
+	var out bytes.Buffer
+
+	params := []string{}
+	for _, p := range r.Parameters {
+		params = append(params, p.String())
+	}
+
+	out.WriteString("fn")
+	out.WriteString("(")
+	out.WriteString(strings.Join(params, ","))
+	out.WriteString(") {\n")
+	out.WriteString(r.Body.String())
+	out.WriteString("\n}")
+
+	return out.String()
 }
