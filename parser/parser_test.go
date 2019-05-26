@@ -525,6 +525,10 @@ func TestSingleParsing(t *testing.T) {
 		// {"a + b + c + d + e; ", "((((a+b)+c)+d)+e)"},
 		// {"a + b * c +d; ", "((a+(b*c))+d)"},
 		// {"a + b * !c", "(a+(b*(!c)))"},
+		{"a * [1,2,3,4][b*c] * d",
+			"((a*([1,2,3,4][(b*c)]))*d)"},
+		{"add(a*b[2], b[1], 2 * [1,2][1])",
+			"add((a*(b[2])),(b[1]),(2*([1,2][1])))"},
 	}
 
 	for _, tt := range tests {
@@ -775,6 +779,54 @@ func TestStringLiteralExpression(t *testing.T) {
 
 	if literal.Value != "hello world" {
 		t.Fatalf("literal.Value not %q, got=%q", "hello world", literal.Value)
+	}
+
+}
+
+func TestParsingArrayLiterals(t *testing.T) {
+	input := `[1, 2 * 2, 3 + 3 ]; `
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	stmt := program.Statements[0].(*ast.ExpressionStatement)
+	arr, ok := stmt.ExpressionValue.(*ast.ArrayLiteral)
+	if !ok {
+		t.Fatalf("exp no *ast.ArrayLiteral. got=%T (%+v)", stmt.ExpressionValue, stmt.ExpressionValue)
+	}
+
+	if len(arr.Elements) != 3 {
+		t.Fatalf("len(arr.Elements) not 3. got=%d", len(arr.Elements))
+	}
+
+	testIntegerLiteral(t, arr.Elements[0], 1)
+	testInfixExpression(t, arr.Elements[1], 2, "*", 2)
+	testInfixExpression(t, arr.Elements[2], 3, "+", 3)
+}
+
+func TestParsingIndexExpression(t *testing.T) {
+	input := `myArray[1 + 1]; `
+
+	l := lexer.New(input)
+	p := New(l)
+
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	stmt := program.Statements[0].(*ast.ExpressionStatement)
+	indExpr, ok := stmt.ExpressionValue.(*ast.IndexExpression)
+	if !ok {
+		t.Fatalf("exp no *ast.IndexExpression. got=%T (%+v)", stmt.ExpressionValue, stmt.ExpressionValue)
+	}
+
+	if !testIdentifier(t, indExpr.Left, "myArray") {
+		return
+	}
+
+	if !testInfixExpression(t, indExpr.Index, 1, "+", 1) {
+		return
 	}
 
 }

@@ -23,6 +23,9 @@ const (
 
 	// CALL means function call (
 	CALL
+
+	// arr[index]
+	INDEX
 )
 
 // used in infix
@@ -38,6 +41,8 @@ var precedences = map[token.TokenType]int{
 
 	// ( is for function call, which is the heighest priority
 	token.LPAREN: CALL,
+
+	token.LBRACKET: INDEX,
 }
 
 type (
@@ -68,15 +73,25 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerPrefix(token.TRUE, p.parseBoolean)
 	p.registerPrefix(token.FALSE, p.parseBoolean)
 
+	// !false
 	p.registerPrefix(token.BANG, p.parsePrefixExpression)
+	// -5
 	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 
+	// 1 * ( 2 + 3) + 4
 	p.registerPrefix(token.LPAREN, p.parseGroupedExpression)
+
+	// if (2 > 1) { 2 + 3 } else { 4 + 5 }
 	p.registerPrefix(token.IF, p.parseIfExpression)
 
+	// fn(a, b) { let c = a + b; c }
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 
+	// "abc"
 	p.registerPrefix(token.STRING, p.parseStringLiteral)
+
+	// arraylist [1, 2 + 2, 3 * 3]
+	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
 
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	// 都是 infix，尽管类型多，但是构造的 ast.node 类型是一样的 InfixExpression，
@@ -93,6 +108,9 @@ func New(l *lexer.Lexer) *Parser {
 	// ( 是 fun call 的 infix op，处理逻辑和 +- 等上面的不同
 	// 返回 CallExpression, 直接在 eval 顶层直接处理
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
+
+	// arr[2]
+	p.registerInfix(token.LBRACKET, p.parseIndexExpression)
 
 	p.nextToken()
 	p.nextToken()
@@ -507,7 +525,8 @@ func (p *Parser) parseFormalParams() []*ast.Identifier {
 func (p *Parser) parseCallExpression(fn ast.Expression) ast.Expression {
 	expr := &ast.CallExpression{Token: p.curToken, CallableName: fn}
 
-	expr.ActualParams = p.parseActualParams()
+	// expr.ActualParams = p.parseActualParams()
+	expr.ActualParams = p.parseExpressionList(token.RPAREN)
 
 	return expr
 }
@@ -594,4 +613,51 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 
 func (p *Parser) parseStringLiteral() ast.Expression {
 	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+}
+
+func (p *Parser) parseArrayLiteral() ast.Expression {
+	arr := &ast.ArrayLiteral{Token: p.curToken}
+
+	arr.Elements = p.parseExpressionList(token.RBRACKET)
+
+	return arr
+}
+
+func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
+	list := []ast.Expression{}
+
+	if p.peekTokenIs(end) {
+		p.nextToken()
+		return list
+	}
+
+	p.nextToken()
+	list = append(list, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(end) {
+		return nil
+	}
+
+	return list
+}
+
+func (p *Parser) parseIndexExpression(left ast.Expression) ast.Expression {
+	exp := &ast.IndexExpression{Token: p.curToken, Left: left}
+
+	p.nextToken()
+
+	exp.Index = p.parseExpression(LOWEST)
+
+	// skip the right ]
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+	return exp
 }

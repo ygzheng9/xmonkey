@@ -39,6 +39,9 @@ const (
 
 	STRING = "STRING"
 
+	LBRACKET = "["
+	RBRACKET = "]"
+
 	// Keywords
 	FUNCTION = "FUNCTION"
 	LET      = "LET"

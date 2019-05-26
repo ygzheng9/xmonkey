@@ -84,6 +84,10 @@ func (l *Lexer) NextToken() token.Token {
 	case '"':
 		tok.Type = token.STRING
 		tok.Literal = l.readString()
+	case '[':
+		tok = newToken(token.LBRACKET, l.ch)
+	case ']':
+		tok = newToken(token.RBRACKET, l.ch)
 
 	default:
 		if isLetter(l.ch) {
@@ -94,6 +98,7 @@ func (l *Lexer) NextToken() token.Token {
 			tok.Type = token.LookupIdent(tok.Literal)
 			return tok
 		} else if isDigit(l.ch) {
+			// readNumber returns string, and in parser will convert to integer
 			tok.Literal = l.readNumber()
 			tok.Type = token.INT
 			return tok
