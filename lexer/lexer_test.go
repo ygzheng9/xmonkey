@@ -19,7 +19,7 @@ func TestNextToken(t *testing.T) {
 		{token.LBRACE, "{"},
 		{token.RBRACE, "}"},
 		{token.COMMA, ","},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 		{token.EOF, ""},
 	}
 
@@ -40,26 +40,26 @@ func TestNextToken(t *testing.T) {
 
 func TestNextToken2(t *testing.T) {
 	input := `let five = 5;
-let ten = 10; 
+let ten = 10;
 
 let add = fn(x, y) {
-  x + y; 
-}; 
+  x + y;
+};
 
-let result = add(five, ten); 
+let result = add(five, ten);
 
 !-/*5;
-5 < 10 > 5; 
+5 < 10 > 5;
 
 if (5 < 10) {
-    return true; 
+    return true;
 } else {
-    return false; 
+    return false;
 }
 
-10 == 10; 
+10 == 10;
 
-10 != 9; 
+10 != 9;
 
 
 `
@@ -71,13 +71,13 @@ if (5 < 10) {
 		{token.IDENT, "five"},
 		{token.ASSIGN, "="},
 		{token.INT, "5"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
 		{token.LET, "let"},
 		{token.IDENT, "ten"},
 		{token.ASSIGN, "="},
 		{token.INT, "10"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
 		{token.LET, "let"},
 		{token.IDENT, "add"},
@@ -92,9 +92,9 @@ if (5 < 10) {
 		{token.IDENT, "x"},
 		{token.PLUS, "+"},
 		{token.IDENT, "y"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 		{token.RBRACE, "}"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
 		{token.LET, "let"},
 		{token.IDENT, "result"},
@@ -105,21 +105,21 @@ if (5 < 10) {
 		{token.COMMA, ","},
 		{token.IDENT, "ten"},
 		{token.RPAREN, ")"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
 		{token.BANG, "!"},
 		{token.MINUS, "-"},
 		{token.SLASH, "/"},
 		{token.ASTERISK, "*"},
 		{token.INT, "5"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
 		{token.INT, "5"},
 		{token.LT, "<"},
 		{token.INT, "10"},
 		{token.GT, ">"},
 		{token.INT, "5"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
 		{token.IF, "if"},
 		{token.LPAREN, "("},
@@ -130,25 +130,55 @@ if (5 < 10) {
 		{token.LBRACE, "{"},
 		{token.RETURN, "return"},
 		{token.TRUE, "true"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 		{token.RBRACE, "}"},
 		{token.ELSE, "else"},
 		{token.LBRACE, "{"},
 		{token.RETURN, "return"},
 		{token.FALSE, "false"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 		{token.RBRACE, "}"},
 
 		{token.INT, "10"},
 		{token.EQ, "=="},
 		{token.INT, "10"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
 		{token.INT, "10"},
 		{token.NOT_EQ, "!="},
 		{token.INT, "9"},
-		{token.SIMICOLON, ";"},
+		{token.SEMICOLON, ";"},
 
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q", i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q", i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+
+}
+
+func TestNextToken3(t *testing.T) {
+	input := `"foobar"
+	"foo bar"
+`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.STRING, "foobar"},
+		{token.STRING, "foo bar"},
 		{token.EOF, ""},
 	}
 

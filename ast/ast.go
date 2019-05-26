@@ -282,9 +282,9 @@ func (r *IfExpression) String() string {
 // Notice: no name for the function
 type FunctionLiteral struct {
 	// token.FUNCTION is always the same (fn)
-	Token      token.Token
-	Parameters []*Identifier
-	Body       *BlockStatement
+	Token        token.Token
+	FormalParams []*Identifier
+	Body         *BlockStatement
 }
 
 func (r *FunctionLiteral) expressionNode()      {}
@@ -293,7 +293,7 @@ func (r *FunctionLiteral) String() string {
 	var out bytes.Buffer
 
 	params := []string{}
-	for _, p := range r.Parameters {
+	for _, p := range r.FormalParams {
 		params = append(params, p.String())
 	}
 
@@ -308,9 +308,10 @@ func (r *FunctionLiteral) String() string {
 
 // expression: fn call
 type CallExpression struct {
-	Token     token.Token
-	Function  Expression
-	Arguments []Expression
+	// Token is fixed to (
+	Token        token.Token
+	CallableName Expression
+	ActualParams []Expression
 }
 
 func (r *CallExpression) expressionNode()      {}
@@ -319,14 +320,23 @@ func (r *CallExpression) String() string {
 	var out bytes.Buffer
 
 	args := []string{}
-	for _, p := range r.Arguments {
+	for _, p := range r.ActualParams {
 		args = append(args, p.String())
 	}
 
-	out.WriteString(r.Function.String())
+	out.WriteString(r.CallableName.String())
 	out.WriteString("(")
 	out.WriteString(strings.Join(args, ","))
 	out.WriteString(")")
 
 	return out.String()
 }
+
+type StringLiteral struct {
+	Token token.Token
+	Value string
+}
+
+func (r *StringLiteral) expressionNode()      {}
+func (r *StringLiteral) TokenLiteral() string { return r.Token.Literal }
+func (r *StringLiteral) String() string       { return r.Token.Literal }

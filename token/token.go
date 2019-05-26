@@ -30,12 +30,14 @@ const (
 
 	// Delimiters
 	COMMA     = ","
-	SIMICOLON = ";"
+	SEMICOLON = ";"
 
 	LPAREN = "("
 	RPAREN = ")"
 	LBRACE = "{"
 	RBRACE = "}"
+
+	STRING = "STRING"
 
 	// Keywords
 	FUNCTION = "FUNCTION"

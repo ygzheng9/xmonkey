@@ -7,6 +7,8 @@ import (
 	"xmonkey/ast"
 )
 
+type BuiltinFunc func(args ...Object) Object
+
 type ObjectType string
 
 const (
@@ -16,6 +18,10 @@ const (
 	RETURN_VALUE_OBJ = "RETURN_VALUE"
 	ERROR_OBJ        = "ERROR"
 	FUNCTION_OBJ     = "FUNCTION"
+
+	STRING_OBJ = "STRING"
+
+	BUILTIN_OBJ = "BUILTIN"
 )
 
 type Object interface {
@@ -71,9 +77,9 @@ func (r *Error) Inspect() string {
 // Parameters are formal params, the name will be used for set up the call env.
 // Env will be passed to call env as the outer.
 type Function struct {
-	FormalParams []*ast.Identifier
-	Body         *ast.BlockStatement
-	Env          *Environment
+	FormalParams   []*ast.Identifier
+	Body           *ast.BlockStatement
+	EnvWhenDefined *Environment
 }
 
 func (r *Function) Type() ObjectType { return FUNCTION_OBJ }
@@ -94,3 +100,17 @@ func (r *Function) Inspect() string {
 
 	return out.String()
 }
+
+type String struct {
+	Value string
+}
+
+func (r *String) Type() ObjectType { return STRING_OBJ }
+func (r *String) Inspect() string  { return r.Value }
+
+type Builtin struct {
+	Fn BuiltinFunc
+}
+
+func (r *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (r *Builtin) Inspect() string  { return "built-in function" }

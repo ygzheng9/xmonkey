@@ -21,7 +21,7 @@ const (
 	// PREFIX means ! -
 	PREFIX
 
-	// CALL means function call
+	// CALL means function call (
 	CALL
 )
 
@@ -76,7 +76,11 @@ func New(l *lexer.Lexer) *Parser {
 
 	p.registerPrefix(token.FUNCTION, p.parseFunctionLiteral)
 
+	p.registerPrefix(token.STRING, p.parseStringLiteral)
+
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
+	// 都是 infix，尽管类型多，但是构造的 ast.node 类型是一样的 InfixExpression，
+	// 在 eval 顶层是一个入口， 然后根据 op 不同，再做不同的 case 处理
 	p.registerInfix(token.PLUS, p.parseInfixExpression)
 	p.registerInfix(token.MINUS, p.parseInfixExpression)
 	p.registerInfix(token.SLASH, p.parseInfixExpression)
@@ -86,6 +90,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.registerInfix(token.LT, p.parseInfixExpression)
 	p.registerInfix(token.GT, p.parseInfixExpression)
 
+	// ( 是 fun call 的 infix op，处理逻辑和 +- 等上面的不同
+	// 返回 CallExpression, 直接在 eval 顶层直接处理
 	p.registerInfix(token.LPAREN, p.parseCallExpression)
 
 	p.nextToken()
@@ -190,6 +196,9 @@ func (p *Parser) parseStatement() ast.Statement {
 // 这里是 statement，不是 expression；
 // 和 parseProgram 逻辑是一样的，内部是 statements
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	// curToken 固定是 {, 但是不是通过 registerPrefix 设置的;
+	// {}  只出现在 if 和 fn definition 中，所以在 parseIfExpression 和 parseFunctionLiteral 中 hard code 了,  也即：
+	// 在调用 parseBlockStatement 之前，都 expectPeek 确保是 { 了
 	block := &ast.BlockStatement{Token: p.curToken}
 	block.Statements = []ast.Statement{}
 
@@ -233,7 +242,7 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 	stmt.Value = p.parseExpression(LOWEST)
 
 	// skip ; if any at the end
-	for p.peekTokenIs(token.SIMICOLON) {
+	for p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 
@@ -248,7 +257,7 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 
 	stmt.ReturnValue = p.parseExpression(LOWEST)
 
-	for p.peekTokenIs(token.SIMICOLON) {
+	for p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 
@@ -272,7 +281,7 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	// 以 LOWEST 为开始，表示开始解析 expression
 	stmt.ExpressionValue = p.parseExpression(LOWEST)
 
-	if p.peekTokenIs(token.SIMICOLON) {
+	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 
@@ -328,7 +337,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	// p.peekPrecedence() will change, cause p.nextToken() is called during the loop.
 	// after call infix(leftExp) will create another new call stack, which
 	// will have different precedence(set in parseInfix).
-	for !p.peekTokenIs(token.SIMICOLON) && precedence < p.peekPrecedence() {
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
 		loopIndex++
 		nestLevel++
 		fmt.Printf("%s%d >> curToken=%q, precedence=%d, peekToken=%q, peekPrecedence=%d\n",
@@ -436,18 +445,20 @@ func (p *Parser) parseIfExpression() ast.Expression {
 }
 
 // expression: fn(a, b) { a + b; }
+// this is fun definition, not call
 // Notice: no name for the fn, only can use let to assign
 // ast.Expression is interface. the actual return value is struct pointer
 func (p *Parser) parseFunctionLiteral() ast.Expression {
 	// actual return value is pointer, which impl the interface
 	// all the ast.FunctionLiteral is the same token, no name for fn
+	// curToken is fixed to fn, see registerInfix
 	fn := &ast.FunctionLiteral{Token: p.curToken}
 
 	if !p.expectPeek(token.LPAREN) {
 		return nil
 	}
 
-	fn.Parameters = p.parseFunctionParameters()
+	fn.FormalParams = p.parseFormalParams()
 
 	if !p.expectPeek(token.LBRACE) {
 		return nil
@@ -458,7 +469,9 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 	return fn
 }
 
-func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+// 函数定义时的 形参，只能是 identifier, 只需要 name，不需要 eval;
+// 形参的 name 在  callExpression 的 eval 时使用，作为 实参 的 name，保存在 callEnv 中
+func (p *Parser) parseFormalParams() []*ast.Identifier {
 	// ast.Identifier is struct, so use the pointer.
 	identifiers := []*ast.Identifier{}
 
@@ -490,15 +503,17 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
 	return identifiers
 }
 
+// 这是 (  infix  op 的处理逻辑，fn 是 left
 func (p *Parser) parseCallExpression(fn ast.Expression) ast.Expression {
-	expr := &ast.CallExpression{Token: p.curToken, Function: fn}
+	expr := &ast.CallExpression{Token: p.curToken, CallableName: fn}
 
-	expr.Arguments = p.parseCallArguments()
+	expr.ActualParams = p.parseActualParams()
 
 	return expr
 }
 
-func (p *Parser) parseCallArguments() []ast.Expression {
+//  每一个实参都是 expression，在 eval 中会被求值
+func (p *Parser) parseActualParams() []ast.Expression {
 	args := []ast.Expression{}
 
 	if p.peekTokenIs(token.RPAREN) {
@@ -549,7 +564,8 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// 中缀运算符 infix
+// 中缀运算符有很多个，可以对应不同的处理逻辑（区别在于返回不同类型的 Expression），比如：函数调用的 callExpression
+// 这个处理函数中，名字碰巧有 infix
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	nestLevel++
 	fmt.Printf("%sInfix >> curToken=%q\n", leading(), p.curToken)
@@ -574,4 +590,8 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	nestLevel--
 
 	return expression
+}
+
+func (p *Parser) parseStringLiteral() ast.Expression {
+	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 }

@@ -31,7 +31,8 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return &object.ReturnValue{Value: val}
 
 	case *ast.LetStatement:
-		// eval the expression value
+		// eval the expression value, the result would be Integer, Function, Boolean
+		// the result is concrete struct pointer of object.Object interface
 		val := Eval(node.Value, env)
 		if isError(val) {
 			return val
@@ -44,6 +45,8 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return Eval(node.ExpressionValue, env)
 
 	case *ast.PrefixExpression:
+		// there could be many prefix op, however, here is only for only for ! -,
+		// the ast.node is returned by parsePrefixExpression in parser.go
 		right := Eval(node.Right, env)
 		if isError(right) {
 			return right
@@ -66,18 +69,22 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 
 	case *ast.CallExpression:
 		// function call, which is also infix op
-		fun := Eval(node.Function, env)
+		// eval will eventually goto the evalIdentifier,
+		// which will return object.Function(the concrete struct pointer of Object interface ) from store
+		// or builtin func in the builtins map
+		fun := Eval(node.CallableName, env)
 		if isError(fun) {
 			return fun
 		}
 
 		// eval for each actual args
-		args := evalExpressions(node.Arguments, env)
-		if len(args) == 1 && isError(args[0]) {
-			return args[0]
+		actualParams := evalExpressions(node.ActualParams, env)
+		if len(actualParams) == 1 && isError(actualParams[0]) {
+			return actualParams[0]
 		}
 
-		return applyFunction(fun, args)
+		// fun will have 2 types: object.Function or object.Builtin
+		return applyFunction(fun, actualParams)
 
 	case *ast.Identifier:
 		// lookup from env
@@ -94,16 +101,19 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.Boolean:
 		return nativeBoolToBooleanObject(node.Value)
 
+	case *ast.StringLiteral:
+		return &object.String{Value: node.Value}
+
 	case *ast.FunctionLiteral:
 		// FunctionLiteral is the same as IntegerLiteral and Boolean, can only on the right side of assignment =
-		// will be saved to env as the object, and the corresponding name is from let statement
-		params := node.Parameters
+		// will be saved to env as the object when eval letStatement
+		params := node.FormalParams
 		body := node.Body
 
 		// when define fn, there is no name for the fn, so no need to save to env.
 		// However, need bind the env to fn, which will used during the call (closure)
 		// no eval here, only return executable object.
-		return &object.Function{FormalParams: params, Env: env, Body: body}
+		return &object.Function{FormalParams: params, EnvWhenDefined: env, Body: body}
 	}
 
 	return nil
@@ -224,6 +234,8 @@ func evalInfixExpression(op string, left, right object.Object) object.Object {
 		return nativeBoolToBooleanObject(left != right)
 	case left.Type() != right.Type():
 		return newError("type mismatch: %s %s %s", left.Type(), op, right.Type())
+	case left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ:
+		return evalStringInfixExpression(op, left, right)
 	default:
 		return newError("unknown operator: %s %s %s", left.Type(), op, right.Type())
 	}
@@ -297,12 +309,15 @@ func isError(obj object.Object) bool {
 
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
 	// get value from env
-	val, ok := env.Get(node.Name)
-	if !ok {
-		return newError("identifier not found: %s", node.Name)
+	if val, ok := env.Get(node.Name); ok {
+		return val
 	}
 
-	return val
+	if builtin, ok := builtins[node.Name]; ok {
+		return builtin
+	}
+
+	return newError("identifier not found: %s", node.Name)
 }
 
 // eval for each expr in the exps
@@ -322,19 +337,31 @@ func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Ob
 }
 
 func applyFunction(fn object.Object, args []object.Object) object.Object {
-	fun, ok := fn.(*object.Function)
-	if !ok {
+	switch fun := fn.(type) {
+	case *object.Function:
+		// let foo = fn(a,b) { a + b}
+		// when eval this letStatement, will build the env: foo is the key, the value is &object.Function(see eval case for FunctionLiteral)
+		// when eval foo(2, 3), foo is the identifier, which eval in env (see eval case for CallExpression), and
+		// the result is the Function saved by letStatement
+		extendedEnv := createCallEnv(fun, args)
+		evaluated := Eval(fun.Body, extendedEnv)
+		return unwrapReturnValue(evaluated)
+
+	case *object.Builtin:
+		// returned from evalIdentifier
+		// Fn is func in golang, and will not be evaled, in the definition of Fn, there is no closure.
+		// so there is no env here, all infos should passed through the args, which will be evaled in the env
+		return fun.Fn(args...)
+
+	default:
 		return newError("not a function: %s", fn.Type())
 	}
 
-	extendedEnv := extendFunctionEnv(fun, args)
-	evaluated := Eval(fun.Body, extendedEnv)
-	return unwrapReturnValue(evaluated)
 }
 
-func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Environment {
+func createCallEnv(fn *object.Function, args []object.Object) *object.Environment {
 	// create call env(new env) based on fn define env (old env)
-	env := object.NewEnclosedEnv(fn.Env)
+	env := object.NewEnclosedEnv(fn.EnvWhenDefined)
 
 	// setup the new env(call env), name is from fn definition's params' name, value is evaled args' values
 	for paramIdx, param := range fn.FormalParams {
@@ -350,4 +377,14 @@ func unwrapReturnValue(obj object.Object) object.Object {
 	}
 
 	return obj
+}
+
+func evalStringInfixExpression(op string, left, right object.Object) object.Object {
+	if op != "+" {
+		return newError("unknown operator: %s %s %s", left.Type(), op, right.Type())
+	}
+
+	l := left.(*object.String).Value
+	r := right.(*object.String).Value
+	return &object.String{Value: l + r}
 }

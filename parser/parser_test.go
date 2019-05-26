@@ -667,12 +667,12 @@ func TestFuncDef(t *testing.T) {
 		t.Fatalf("stmt.Expression is not ast.FunctionLiteral, got=%T", stmt.ExpressionValue)
 	}
 
-	if len(fn.Parameters) != 2 {
-		t.Fatalf("fn parameters is not 2, got=%d", len(fn.Parameters))
+	if len(fn.FormalParams) != 2 {
+		t.Fatalf("fn parameters is not 2, got=%d", len(fn.FormalParams))
 	}
 
-	testLiteralExpression(t, fn.Parameters[0], "x")
-	testLiteralExpression(t, fn.Parameters[1], "y")
+	testLiteralExpression(t, fn.FormalParams[0], "x")
+	testLiteralExpression(t, fn.FormalParams[1], "y")
 
 	if len(fn.Body.Statements) != 1 {
 		t.Fatalf("fn.Body.Statements has not 1 statement, got=%d", len(fn.Body.Statements))
@@ -712,12 +712,12 @@ func TestFuncParameters(t *testing.T) {
 			t.Errorf("%s is not FunctionLiteral, got=%T", tt.input, stmt.ExpressionValue)
 		}
 
-		if len(fn.Parameters) != len(tt.expected) {
-			t.Errorf("parameter lenght wrong. want=%d, got=%d", len(tt.expected), len(fn.Parameters))
+		if len(fn.FormalParams) != len(tt.expected) {
+			t.Errorf("parameter lenght wrong. want=%d, got=%d", len(tt.expected), len(fn.FormalParams))
 		}
 
 		for i, ident := range tt.expected {
-			testLiteralExpression(t, fn.Parameters[i], ident)
+			testLiteralExpression(t, fn.FormalParams[i], ident)
 		}
 
 	}
@@ -746,15 +746,35 @@ func TestCallExpression(t *testing.T) {
 		t.Errorf("stmt.Expression is not ast.CallExpression, got=%T", stmt.ExpressionValue)
 	}
 
-	if !testIdentifier(t, exp.Function, "add") {
+	if !testIdentifier(t, exp.CallableName, "add") {
 		return
 	}
 
-	if len(exp.Arguments) != 3 {
-		t.Errorf("args lenght wrong. want=%d, got=%d", 3, len(exp.Arguments))
+	if len(exp.ActualParams) != 3 {
+		t.Errorf("args lenght wrong. want=%d, got=%d", 3, len(exp.ActualParams))
 	}
 
-	testLiteralExpression(t, exp.Arguments[0], 1)
-	testInfixExpression(t, exp.Arguments[1], 2, "+", 3)
-	testInfixExpression(t, exp.Arguments[2], 4, "*", 5)
+	testLiteralExpression(t, exp.ActualParams[0], 1)
+	testInfixExpression(t, exp.ActualParams[1], 2, "+", 3)
+	testInfixExpression(t, exp.ActualParams[2], 4, "*", 5)
+}
+
+func TestStringLiteralExpression(t *testing.T) {
+	input := `"hello world";`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	stmt := program.Statements[0].(*ast.ExpressionStatement)
+	literal, ok := stmt.ExpressionValue.(*ast.StringLiteral)
+	if !ok {
+		t.Fatalf("exp no *ast.StringLiteral. got=%T (%+v)", stmt.ExpressionValue, stmt.ExpressionValue)
+	}
+
+	if literal.Value != "hello world" {
+		t.Fatalf("literal.Value not %q, got=%q", "hello world", literal.Value)
+	}
+
 }
