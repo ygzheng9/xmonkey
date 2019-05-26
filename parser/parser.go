@@ -17,10 +17,15 @@ const (
 	LESSGREATER
 	SUM
 	PRODUCT
+
+	// PREFIX means ! -
 	PREFIX
+
+	// CALL means function call
 	CALL
 )
 
+// used in infix
 var precedences = map[token.TokenType]int{
 	token.EQ:       EQUALS,
 	token.NOT_EQ:   EQUALS,
@@ -30,7 +35,9 @@ var precedences = map[token.TokenType]int{
 	token.MINUS:    SUM,
 	token.SLASH:    PRODUCT,
 	token.ASTERISK: PRODUCT,
-	token.LPAREN:   CALL,
+
+	// ( is for function call, which is the heighest priority
+	token.LPAREN: CALL,
 }
 
 type (
@@ -213,7 +220,7 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 		return nil
 	}
 
-	stmt.Name = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	stmt.Name = &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
 
 	// if expectPeek return true, it will call nextToken, means move curToken to =
 	if !p.expectPeek(token.ASSIGN) {
@@ -357,7 +364,7 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 
 // prefixFn-1
 func (p *Parser) parseIdentifier() ast.Expression {
-	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	return &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
 }
 
 // prefixFn-2
@@ -429,7 +436,11 @@ func (p *Parser) parseIfExpression() ast.Expression {
 }
 
 // expression: fn(a, b) { a + b; }
+// Notice: no name for the fn, only can use let to assign
+// ast.Expression is interface. the actual return value is struct pointer
 func (p *Parser) parseFunctionLiteral() ast.Expression {
+	// actual return value is pointer, which impl the interface
+	// all the ast.FunctionLiteral is the same token, no name for fn
 	fn := &ast.FunctionLiteral{Token: p.curToken}
 
 	if !p.expectPeek(token.LPAREN) {
@@ -448,6 +459,7 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 }
 
 func (p *Parser) parseFunctionParameters() []*ast.Identifier {
+	// ast.Identifier is struct, so use the pointer.
 	identifiers := []*ast.Identifier{}
 
 	//  没有参数
@@ -459,14 +471,14 @@ func (p *Parser) parseFunctionParameters() []*ast.Identifier {
 	// 第一个参数
 	p.nextToken()
 
-	ident := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	ident := &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
 	identifiers = append(identifiers, ident)
 
 	for p.peekTokenIs(token.COMMA) {
 		//  后续参数
 		p.nextToken()
 		p.nextToken()
-		ident := &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		ident := &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
 		identifiers = append(identifiers, ident)
 	}
 

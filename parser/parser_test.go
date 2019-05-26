@@ -77,8 +77,8 @@ func testLetStatement(t *testing.T, s ast.Statement, name string) bool {
 		return false
 	}
 
-	if letStmt.Name.Value != name {
-		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.Name.Value)
+	if letStmt.Name.Name != name {
+		t.Errorf("letStmt.Name.Value not '%s'. got=%s", name, letStmt.Name.Name)
 		return false
 	}
 
@@ -188,8 +188,8 @@ func TestIdentifierExpression(t *testing.T) {
 		t.Fatalf("exp not *ast.Identifier. got=%T", stmt.ExpressionValue)
 	}
 
-	if ident.Value != "foobar" {
-		t.Errorf("ident.Value not %s. got=%s", "foobar", ident.Value)
+	if ident.Name != "foobar" {
+		t.Errorf("ident.Value not %s. got=%s", "foobar", ident.Name)
 	}
 
 	if ident.TokenLiteral() != "foobar" {
@@ -301,8 +301,8 @@ func testIdentifier(t *testing.T, exp ast.Expression, value string) bool {
 		return false
 	}
 
-	if ident.Value != value {
-		t.Errorf("ident.Value not %s. got=%s", value, ident.Value)
+	if ident.Name != value {
+		t.Errorf("ident.Value not %s. got=%s", value, ident.Name)
 		return false
 	}
 

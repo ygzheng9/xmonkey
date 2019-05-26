@@ -7,19 +7,20 @@ import (
 )
 
 var (
+	// only need one instance
 	NULL  = &object.NULL{}
 	TRUE  = &object.Boolean{Value: true}
 	FALSE = &object.Boolean{Value: false}
 )
 
+// Eval always needs env
+// return signature is Object, which is interface, however the actual returned value is always the pointer of struct
 func Eval(node ast.Node, env *object.Environment) object.Object {
 	switch node := node.(type) {
 	case *ast.Program:
-		// return evalStatements(node.Statements)
 		return evalProgram(node, env)
 
 	case *ast.BlockStatement:
-		// return evalStatements(node.Statements)
 		return evalBlockStatement(node, env)
 
 	case *ast.ReturnStatement:
@@ -30,17 +31,17 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return &object.ReturnValue{Value: val}
 
 	case *ast.LetStatement:
+		// eval the expression value
 		val := Eval(node.Value, env)
 		if isError(val) {
 			return val
 		}
-		env.Set(node.Name.Value, val)
+
+		// save the identifier to env
+		env.Set(node.Name.Name, val)
 
 	case *ast.ExpressionStatement:
 		return Eval(node.ExpressionValue, env)
-
-	case *ast.IfExpression:
-		return evalIfExpression(node, env)
 
 	case *ast.PrefixExpression:
 		right := Eval(node.Right, env)
@@ -50,6 +51,8 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalPrefixExpression(node.Operator, right)
 
 	case *ast.InfixExpression:
+		// ast.InfixExpression is from registerPrefix, here is +-*/ == !=
+		// not include function call, which is also infix op but with different parsefn
 		left := Eval(node.Left, env)
 		if isError(left) {
 			return left
@@ -61,33 +64,46 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		}
 		return evalInfixExpression(node.Operator, left, right)
 
-	case *ast.IntegerLiteral:
-		return &object.Integer{Value: node.Value}
-
-	case *ast.Boolean:
-		// return &object.Boolean{Value: node.Value}
-		return nativeBoolToBooleanObject(node.Value)
-
-	case *ast.Identifier:
-		return evalIdentifier(node, env)
-
-	case *ast.FunctionLiteral:
-		params := node.Parameters
-		body := node.Body
-		return &object.Function{Parameters: params, Env: env, Body: body}
-
 	case *ast.CallExpression:
+		// function call, which is also infix op
 		fun := Eval(node.Function, env)
 		if isError(fun) {
 			return fun
 		}
 
+		// eval for each actual args
 		args := evalExpressions(node.Arguments, env)
 		if len(args) == 1 && isError(args[0]) {
 			return args[0]
 		}
 
 		return applyFunction(fun, args)
+
+	case *ast.Identifier:
+		// lookup from env
+		return evalIdentifier(node, env)
+
+	// below can only appear on the right side of assignment =
+	case *ast.IfExpression:
+		return evalIfExpression(node, env)
+
+	case *ast.IntegerLiteral:
+		// returned is struct pointer, which implements the object.Object interface
+		return &object.Integer{Value: node.Value}
+
+	case *ast.Boolean:
+		return nativeBoolToBooleanObject(node.Value)
+
+	case *ast.FunctionLiteral:
+		// FunctionLiteral is the same as IntegerLiteral and Boolean, can only on the right side of assignment =
+		// will be saved to env as the object, and the corresponding name is from let statement
+		params := node.Parameters
+		body := node.Body
+
+		// when define fn, there is no name for the fn, so no need to save to env.
+		// However, need bind the env to fn, which will used during the call (closure)
+		// no eval here, only return executable object.
+		return &object.Function{FormalParams: params, Env: env, Body: body}
 	}
 
 	return nil
@@ -99,10 +115,7 @@ func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	for _, stmt := range program.Statements {
 		result = Eval(stmt, env)
 
-		// if returnValue, ok := result.(*object.ReturnValue); ok {
-		// 	return returnValue.Value
-		// }
-
+		// will return for the first return or error
 		switch result := result.(type) {
 		case *object.ReturnValue:
 			return result.Value
@@ -119,10 +132,6 @@ func evalBlockStatement(block *ast.BlockStatement, env *object.Environment) obje
 
 	for _, stmt := range block.Statements {
 		result = Eval(stmt, env)
-
-		// if result != nil && result.Type() == object.RETURN_VALUE_OBJ {
-		// 	return result
-		// }
 
 		if result != nil {
 			rt := result.Type()
@@ -142,6 +151,7 @@ func evalStatements(stmts []ast.Statement, env *object.Environment) object.Objec
 	for _, stmt := range stmts {
 		result = Eval(stmt, env)
 
+		// will return for the first return object
 		if returnValue, ok := result.(*object.ReturnValue); ok {
 			return returnValue.Value
 		}
@@ -159,6 +169,7 @@ func nativeBoolToBooleanObject(input bool) *object.Boolean {
 }
 
 func evalPrefixExpression(operator string, right object.Object) object.Object {
+	// only defined two actual prefix op: ! -, see parser.go
 	switch operator {
 	case "!":
 		return evalBangOperator(right)
@@ -190,7 +201,6 @@ func evalMinusPrefixOperator(right object.Object) object.Object {
 	}
 
 	if right.Type() != object.INTEGER_OBJ {
-		// return NULL
 		return newError("unknown operator: -%s", right.Type())
 
 	}
@@ -215,7 +225,6 @@ func evalInfixExpression(op string, left, right object.Object) object.Object {
 	case left.Type() != right.Type():
 		return newError("type mismatch: %s %s %s", left.Type(), op, right.Type())
 	default:
-		// return NULL
 		return newError("unknown operator: %s %s %s", left.Type(), op, right.Type())
 	}
 }
@@ -242,7 +251,6 @@ func evalIntegerInfix(op string, left, right object.Object) object.Object {
 	case "!=":
 		return nativeBoolToBooleanObject(leftVal != rightVal)
 	default:
-		// return NULL
 		return newError("unknown operator: %s %s %s", left.Type(), op, right.Type())
 	}
 }
@@ -288,15 +296,16 @@ func isError(obj object.Object) bool {
 }
 
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
-	val, ok := env.Get(node.Value)
-
+	// get value from env
+	val, ok := env.Get(node.Name)
 	if !ok {
-		return newError("identifier not found: %s", node.Value)
+		return newError("identifier not found: %s", node.Name)
 	}
 
 	return val
 }
 
+// eval for each expr in the exps
 func evalExpressions(exps []ast.Expression, env *object.Environment) []object.Object {
 	var result []object.Object
 
@@ -324,10 +333,12 @@ func applyFunction(fn object.Object, args []object.Object) object.Object {
 }
 
 func extendFunctionEnv(fn *object.Function, args []object.Object) *object.Environment {
+	// create call env(new env) based on fn define env (old env)
 	env := object.NewEnclosedEnv(fn.Env)
 
-	for paramIdx, param := range fn.Parameters {
-		env.Set(param.Value, args[paramIdx])
+	// setup the new env(call env), name is from fn definition's params' name, value is evaled args' values
+	for paramIdx, param := range fn.FormalParams {
+		env.Set(param.Name, args[paramIdx])
 	}
 
 	return env

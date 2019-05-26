@@ -158,7 +158,7 @@ func (r *ExpressionStatement) String() string {
 type Identifier struct {
 	// the token.IDENT token
 	Token token.Token
-	Value string
+	Name  string
 }
 
 func (i *Identifier) expressionNode() {}
@@ -167,7 +167,7 @@ func (i *Identifier) TokenLiteral() string {
 }
 
 func (i *Identifier) String() string {
-	return i.Value
+	return i.Name
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -278,8 +278,10 @@ func (r *IfExpression) String() string {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// expression: fn def
+// expression: fn(a, b) { c = a + b; c; }
+// Notice: no name for the function
 type FunctionLiteral struct {
+	// token.FUNCTION is always the same (fn)
 	Token      token.Token
 	Parameters []*Identifier
 	Body       *BlockStatement

@@ -155,9 +155,7 @@ func TestReturnStatement(t *testing.T) {
 		{"return 10;", 10},
 		{"return (3*2+5)", 11},
 		{"return 10; 9", 10},
-		{`
-if (10>1) { return 10} return 1;
-`, 10},
+		{`if (10>1) { return 10} return 1;`, 10},
 	}
 
 	for _, tt := range tests {
@@ -217,12 +215,12 @@ func TestFunctionDef(t *testing.T) {
 		t.Fatalf("object is not Function def. got=%T (%+v)", evaluated, evaluated)
 	}
 
-	if len(fn.Parameters) != 1 {
-		t.Fatalf("parameters len is wrong. got=%d, want=1", len(fn.Parameters))
+	if len(fn.FormalParams) != 1 {
+		t.Fatalf("parameters len is wrong. got=%d, want=1", len(fn.FormalParams))
 	}
 
-	if fn.Parameters[0].String() != "x" {
-		t.Fatalf("param1 is wrong. got=%s, want=x", fn.Parameters[0])
+	if fn.FormalParams[0].String() != "x" {
+		t.Fatalf("param1 is wrong. got=%s, want=x", fn.FormalParams[0])
 	}
 
 	expectedBody := "(x+2)"
@@ -272,6 +270,5 @@ let apply = fn(a, b, f) { f(a, b) }
 apply(2, 5, add);
 
 `
-
 	testIntegerObject(t, testEval(input), 7)
 }

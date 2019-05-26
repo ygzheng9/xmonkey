@@ -67,10 +67,13 @@ func (r *Error) Inspect() string {
 	return "ERROR: " + r.Message
 }
 
+// Function is function definition, Body will evaled only when call, not definition
+// Parameters are formal params, the name will be used for set up the call env.
+// Env will be passed to call env as the outer.
 type Function struct {
-	Parameters []*ast.Identifier
-	Body       *ast.BlockStatement
-	Env        *Environment
+	FormalParams []*ast.Identifier
+	Body         *ast.BlockStatement
+	Env          *Environment
 }
 
 func (r *Function) Type() ObjectType { return FUNCTION_OBJ }
@@ -78,7 +81,7 @@ func (r *Function) Inspect() string {
 	var out bytes.Buffer
 
 	params := []string{}
-	for _, p := range r.Parameters {
+	for _, p := range r.FormalParams {
 		params = append(params, p.String())
 	}
 
