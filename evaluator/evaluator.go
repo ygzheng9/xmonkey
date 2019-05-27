@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"fmt"
+
 	"xmonkey/ast"
 	"xmonkey/object"
 )
@@ -24,7 +25,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		return evalBlockStatement(node, env)
 
 	case *ast.ReturnStatement:
-		val := Eval(node.ReturnValue, env)
+		val := Eval(node.Expr, env)
 		if isError(val) {
 			return val
 		}
@@ -33,7 +34,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 	case *ast.LetStatement:
 		// eval the expression value, the result would be Integer, Function, Boolean
 		// the result is concrete struct pointer of object.Object interface
-		val := Eval(node.Value, env)
+		val := Eval(node.Expr, env)
 		if isError(val) {
 			return val
 		}
@@ -42,7 +43,7 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		env.Set(node.Name.Name, val)
 
 	case *ast.ExpressionStatement:
-		return Eval(node.ExpressionValue, env)
+		return Eval(node.Expr, env)
 
 	case *ast.PrefixExpression:
 		// there could be many prefix op, however, here is only for only for ! -,
@@ -208,7 +209,6 @@ func evalPrefixExpression(operator string, right object.Object) object.Object {
 	case "-":
 		return evalMinusPrefixOperator(right)
 	default:
-		// return NULL
 		return newError("unknown operator: %s%s", operator, right.Type())
 	}
 }

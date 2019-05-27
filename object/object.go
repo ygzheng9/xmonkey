@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+
 	"xmonkey/ast"
 )
-
-type BuiltinFunc func(args ...Object) Object
 
 type ObjectType string
 
@@ -26,37 +25,37 @@ const (
 	ARRAY_OBJ = "ARRAY"
 )
 
+// Object 是 eval 的返回值，是一个 interface，具体的返回值都是 struct pointer
 type Object interface {
 	Type() ObjectType
 	Inspect() string
 }
 
+// Integer
 type Integer struct {
 	Value int64
 }
 
 func (r *Integer) Type() ObjectType { return INTEGER_OBJ }
-func (r *Integer) Inspect() string {
-	return fmt.Sprintf("%d", r.Value)
-}
+func (r *Integer) Inspect() string  { return fmt.Sprintf("%d", r.Value) }
 
+// Boolean
 type Boolean struct {
 	Value bool
 }
 
 func (r *Boolean) Type() ObjectType { return BOOLEAN_OBJ }
-func (r *Boolean) Inspect() string {
-	return fmt.Sprintf("%t", r.Value)
-}
+func (r *Boolean) Inspect() string  { return fmt.Sprintf("%t", r.Value) }
 
-type NULL struct {
-}
+// NULL
+type NULL struct{}
 
 func (r *NULL) Type() ObjectType { return NULL_OBJ }
 func (r *NULL) Inspect() string {
 	return "null"
 }
 
+// ReturnValue
 type ReturnValue struct {
 	Value Object
 }
@@ -66,14 +65,13 @@ func (r *ReturnValue) Inspect() string {
 	return r.Value.Inspect()
 }
 
+// Error
 type Error struct {
 	Message string
 }
 
 func (r *Error) Type() ObjectType { return ERROR_OBJ }
-func (r *Error) Inspect() string {
-	return "ERROR: " + r.Message
-}
+func (r *Error) Inspect() string  { return "ERROR: " + r.Message }
 
 // Function is function definition, Body will evaled only when call, not definition
 // Parameters are formal params, the name will be used for set up the call env.
@@ -110,13 +108,6 @@ type String struct {
 func (r *String) Type() ObjectType { return STRING_OBJ }
 func (r *String) Inspect() string  { return r.Value }
 
-type Builtin struct {
-	Fn BuiltinFunc
-}
-
-func (r *Builtin) Type() ObjectType { return BUILTIN_OBJ }
-func (r *Builtin) Inspect() string  { return "built-in function" }
-
 type Array struct {
 	Elements []Object
 }
@@ -136,3 +127,14 @@ func (r *Array) Inspect() string {
 
 	return out.String()
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// BuiltinFunc 内置函数
+type BuiltinFunc func(args ...Object) Object
+
+type Builtin struct {
+	Fn BuiltinFunc
+}
+
+func (r *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (r *Builtin) Inspect() string  { return "built-in function" }
