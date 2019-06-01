@@ -7,11 +7,11 @@ type TokenType string
 // pattern means start with what, end with what. ect.
 
 // Token stream is the lexer output, and will feed to parser to build the AST
-// Type and Literal are all string.
+// Type and Literal(RawString) are all string.
 // input = 125, and after lexer the token is string "125", after parser will cast to int 125
 type Token struct {
-	Type    TokenType
-	Literal string
+	Type      TokenType
+	RawString string
 }
 
 const (
@@ -43,6 +43,8 @@ const (
 	RPAREN = ")"
 	LBRACE = "{"
 	RBRACE = "}"
+
+	COLON = ":"
 
 	STRING = "STRING"
 

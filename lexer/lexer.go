@@ -28,6 +28,14 @@ func (l *Lexer) readChar() {
 	l.readPosition += 1
 }
 
+func (l *Lexer) peekChar() byte {
+	if l.readPosition >= len(l.input) {
+		return 0
+	}
+
+	return l.input[l.readPosition]
+}
+
 func (l *Lexer) NextToken() token.Token {
 	var tok token.Token
 
@@ -41,7 +49,7 @@ func (l *Lexer) NextToken() token.Token {
 			// the same as !=
 			l.readChar()
 			// tok = token.Token{Type: token.EQ, Literal: string(ch) + string(l.ch)}
-			tok = token.Token{Type: token.EQ, Literal: "=="}
+			tok = token.Token{Type: token.EQ, RawString: "=="}
 		} else {
 			tok = newToken(token.ASSIGN, l.ch)
 		}
@@ -54,7 +62,7 @@ func (l *Lexer) NextToken() token.Token {
 			// ch := l.ch
 			l.readChar()
 			// tok = token.Token{Type: token.NOT_EQ, Literal: string(ch) + string(l.ch)}
-			tok = token.Token{Type: token.NOT_EQ, Literal: "!="}
+			tok = token.Token{Type: token.NOT_EQ, RawString: "!="}
 		} else {
 			tok = newToken(token.BANG, l.ch)
 		}
@@ -79,27 +87,30 @@ func (l *Lexer) NextToken() token.Token {
 	case '}':
 		tok = newToken(token.RBRACE, l.ch)
 	case 0:
-		tok.Literal = ""
+		tok.RawString = ""
 		tok.Type = token.EOF
 	case '"':
 		tok.Type = token.STRING
-		tok.Literal = l.readString()
+		tok.RawString = l.readString()
 	case '[':
 		tok = newToken(token.LBRACKET, l.ch)
 	case ']':
 		tok = newToken(token.RBRACKET, l.ch)
 
+	case ':':
+		tok = newToken(token.COLON, l.ch)
+
 	default:
 		if isLetter(l.ch) {
-			tok.Literal = l.readIdentifier()
+			tok.RawString = l.readIdentifier()
 
 			// keywords is subset of identifier
 			// true/false is also keywords
-			tok.Type = token.LookupIdent(tok.Literal)
+			tok.Type = token.LookupIdent(tok.RawString)
 			return tok
 		} else if isDigit(l.ch) {
 			// readNumber returns string, and in parser will convert to integer
-			tok.Literal = l.readNumber()
+			tok.RawString = l.readNumber()
 			tok.Type = token.INT
 			return tok
 		} else {
@@ -112,9 +123,11 @@ func (l *Lexer) NextToken() token.Token {
 }
 
 func newToken(tokenType token.TokenType, ch byte) token.Token {
-	return token.Token{Type: tokenType, Literal: string(ch)}
+	return token.Token{Type: tokenType, RawString: string(ch)}
 }
 
+// identifier has no double quotes, string has double quotes, number is all digital and has no double quotes
+// during lexer, all results are string in host language, no matter identifier, string, number
 func (l *Lexer) readIdentifier() string {
 	position := l.position
 	for isLetter(l.ch) {
@@ -122,6 +135,28 @@ func (l *Lexer) readIdentifier() string {
 	}
 
 	return l.input[position:l.position]
+}
+
+func (l *Lexer) readNumber() string {
+	position := l.position
+
+	for isDigit(l.ch) {
+		l.readChar()
+	}
+
+	return l.input[position:l.position]
+}
+
+func (l *Lexer) readString() string {
+	pos := l.position + 1
+	for {
+		l.readChar()
+		if l.ch == '"' || l.ch == 0 {
+			break
+		}
+	}
+
+	return l.input[pos:l.position]
 }
 
 func isLetter(ch byte) bool {
@@ -137,36 +172,6 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-func (l *Lexer) readNumber() string {
-	position := l.position
-
-	for isDigit(l.ch) {
-		l.readChar()
-	}
-
-	return l.input[position:l.position]
-}
-
 func isDigit(ch byte) bool {
 	return '0' <= ch && ch <= '9'
-}
-
-func (l *Lexer) peekChar() byte {
-	if l.readPosition >= len(l.input) {
-		return 0
-	}
-
-	return l.input[l.readPosition]
-}
-
-func (l *Lexer) readString() string {
-	pos := l.position + 1
-	for {
-		l.readChar()
-		if l.ch == '"' || l.ch == 0 {
-			break
-		}
-	}
-
-	return l.input[pos:l.position]
 }

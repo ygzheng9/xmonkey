@@ -3,6 +3,7 @@ package object
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"strings"
 
 	"xmonkey/ast"
@@ -23,6 +24,8 @@ const (
 	BUILTIN_OBJ = "BUILTIN"
 
 	ARRAY_OBJ = "ARRAY"
+
+	HASH_OBJ = "HASH"
 )
 
 // Object 是 eval 的返回值，是一个 interface，具体的返回值都是 struct pointer
@@ -138,3 +141,65 @@ type Builtin struct {
 
 func (r *Builtin) Type() ObjectType { return BUILTIN_OBJ }
 func (r *Builtin) Inspect() string  { return "built-in function" }
+
+////////////////////////////////////////////////////////////////////////////////
+// HASH
+
+type HashKey struct {
+	Type  ObjectType
+	Value uint64
+}
+
+type HashPair struct {
+	Key   Object
+	Value Object
+}
+
+type Hash struct {
+	Pairs map[HashKey]HashPair
+}
+
+func (r *Hash) Type() ObjectType {
+	return HASH_OBJ
+}
+
+func (r *Hash) Inspect() string {
+
+	var out bytes.Buffer
+
+	pairs := []string{}
+	for _, pair := range r.Pairs {
+		pairs = append(pairs, fmt.Sprintf("%s: %s", pair.Key.Inspect(), pair.Value.Inspect()))
+	}
+
+	out.WriteString("{")
+	out.WriteString(strings.Join(pairs, ", "))
+	out.WriteString("}")
+
+	return out.String()
+}
+
+type Hashable interface {
+	GetHash() HashKey
+}
+
+func (r *Boolean) GetHash() HashKey {
+	var value uint64
+	value = 0
+
+	if r.Value {
+		value = 1
+	}
+
+	return HashKey{Type: r.Type(), Value: value}
+}
+
+func (r *Integer) GetHash() HashKey {
+	return HashKey{Type: r.Type(), Value: uint64(r.Value)}
+}
+
+func (r *String) GetHash() HashKey {
+	h := fnv.New64a()
+	h.Write([]byte(r.Value))
+	return HashKey{Type: r.Type(), Value: h.Sum64()}
+}

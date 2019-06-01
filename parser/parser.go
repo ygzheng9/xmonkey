@@ -95,6 +95,9 @@ func New(l *lexer.Lexer) *Parser {
 	// arraylist [1, 2 + 2, 3 * 3]
 	p.registerPrefix(token.LBRACKET, p.parseArrayLiteral)
 
+	// {"one": 1, "two": 2}
+	p.registerPrefix(token.LBRACE, p.parseHashLiteral)
+
 	p.infixParseFns = make(map[token.TokenType]infixParseFn)
 	// 都是 infix，尽管类型多，但是构造的 ast.node 类型是一样的 InfixExpression，
 	// 在 eval 顶层是一个入口， 然后根据 op 不同，再做不同的 case 处理
@@ -248,7 +251,7 @@ func (p *Parser) parseLetStatement() *ast.LetStatement {
 		return nil
 	}
 
-	stmt.Name = &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
+	stmt.Name = &ast.Identifier{Token: p.curToken, Name: p.curToken.RawString}
 
 	// if expectPeek return true, it will call nextToken, means move curToken to =
 	if !p.expectPeek(token.ASSIGN) {
@@ -292,7 +295,7 @@ func leading() string {
 }
 
 func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
-	fmt.Printf("ExpressionStatement. curToken=%q\n", p.curToken)
+	// fmt.Printf("ExpressionStatement. curToken=%q\n", p.curToken)
 
 	// 一个 statement 只会执行一次，并且 Token 等于第一个 token
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
@@ -325,8 +328,7 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 // 后续 prefixFn 和 infixFn 传入的是 左边操作符的 precedence；
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	nestLevel++
-	fmt.Printf("%sExpr >> curToken=%q, precedence=%d\n",
-		leading(), p.curToken, precedence)
+	// fmt.Printf("%sExpr >> curToken=%q, precedence=%d\n", leading(), p.curToken, precedence)
 
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
@@ -340,13 +342,13 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	leftExp := prefix()
 
 	// show log info
-	if precedence < p.peekPrecedence() {
-		fmt.Printf("%sLoop-Got curToken=%q, precedence=%d, peekToken=%q, peekPrecedence=%d\n",
-			leading(), p.curToken, precedence, p.peekToken, p.peekPrecedence())
-	} else {
-		fmt.Printf("%sLoop-Skip curToken=%q, precedence=%d, peekToken=%q, peekPrecedence=%d\n",
-			leading(), p.curToken, precedence, p.peekToken, p.peekPrecedence())
-	}
+	// if precedence < p.peekPrecedence() {
+	// 	fmt.Printf("%sLoop-Got curToken=%q, precedence=%d, peekToken=%q, peekPrecedence=%d\n",
+	// 		leading(), p.curToken, precedence, p.peekToken, p.peekPrecedence())
+	// } else {
+	// 	fmt.Printf("%sLoop-Skip curToken=%q, precedence=%d, peekToken=%q, peekPrecedence=%d\n",
+	// 		leading(), p.curToken, precedence, p.peekToken, p.peekPrecedence())
+	// }
 
 	// local variable to track the loop times
 	// nestLevel is global to track the depth
@@ -360,8 +362,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
 		loopIndex++
 		nestLevel++
-		fmt.Printf("%s%d >> curToken=%q, precedence=%d, peekToken=%q, peekPrecedence=%d\n",
-			leading(), loopIndex, p.curToken, precedence, p.peekToken, p.peekPrecedence())
+		// fmt.Printf("%s%d >> curToken=%q, precedence=%d, peekToken=%q, peekPrecedence=%d\n",
+		// 	leading(), loopIndex, p.curToken, precedence, p.peekToken, p.peekPrecedence())
 
 		infix := p.infixParseFns[p.peekToken.Type]
 		if infix == nil {
@@ -374,13 +376,13 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		// 外边的循环，这里的迭代赋值
 		leftExp = infix(leftExp)
 
-		fmt.Printf("%s%d << curToken=%q, precedence=%d, peekToekn=%q, peekPrecedence=%d\n",
-			leading(), loopIndex, p.curToken, precedence, p.peekToken, p.peekPrecedence())
+		// fmt.Printf("%s%d << curToken=%q, precedence=%d, peekToekn=%q, peekPrecedence=%d\n",
+		// 	leading(), loopIndex, p.curToken, precedence, p.peekToken, p.peekPrecedence())
 		nestLevel--
 	}
 
-	fmt.Printf("%sExpr << curToken=%q, precedence=%d\n",
-		leading(), p.curToken, precedence)
+	// fmt.Printf("%sExpr << curToken=%q, precedence=%d\n",
+	// 	leading(), p.curToken, precedence)
 	nestLevel--
 
 	return leftExp
@@ -395,11 +397,11 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 // prefixFn 有很多，不仅仅是这一个，只是这个碰巧名字中含有 prefix, 处理 ! -  单目前缀运算符
 func (p *Parser) parsePrefixExpression() ast.Expression {
 	nestLevel++
-	fmt.Printf("%sPrefix >> curToken=%q\n", leading(), p.curToken)
+	// fmt.Printf("%sPrefix >> curToken=%q\n", leading(), p.curToken)
 
 	exp := &ast.PrefixExpression{
 		Token:    p.curToken,
-		Operator: p.curToken.Literal,
+		Operator: p.curToken.RawString,
 	}
 
 	// 前缀要处理的是 !a ， 而  curToken=!，所以需要 next
@@ -410,8 +412,7 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	// PREFIX 的优先级是最高的，也即，后续不可能有更高的优先级
 	exp.Right = p.parseExpression(PREFIX)
 
-	fmt.Printf("%sPrefix << curToken=%q\n",
-		leading(), p.curToken)
+	// fmt.Printf("%sPrefix << curToken=%q\n", leading(), p.curToken)
 	nestLevel--
 
 	return exp
@@ -419,7 +420,7 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 
 // prefixFn-1
 func (p *Parser) parseIdentifier() ast.Expression {
-	return &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
+	return &ast.Identifier{Token: p.curToken, Name: p.curToken.RawString}
 }
 
 // prefixFn-2
@@ -429,9 +430,9 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	// here cast the string to int.
 	// cast 的依据是 token.Type, token.Type 是 lexer 中根据 pattern 读取 input 中的 string 解析出来的
 	// the casting could also be left to eval，如果那样的话，eval 的依据是 这里返回的 node 的类型 (&ast.IntegerLiteral)
-	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
+	value, err := strconv.ParseInt(p.curToken.RawString, 0, 64)
 	if err != nil {
-		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Literal)
+		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.RawString)
 		p.errors = append(p.errors, msg)
 		return nil
 	}
@@ -447,7 +448,7 @@ func (p *Parser) parseBoolean() ast.Expression {
 }
 
 func (p *Parser) parseStringLiteral() ast.Expression {
-	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.RawString}
 }
 
 func (p *Parser) parseArrayLiteral() ast.Expression {
@@ -536,14 +537,14 @@ func (p *Parser) parseFormalParams() []*ast.Identifier {
 	// 第一个参数
 	p.nextToken()
 
-	ident := &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
+	ident := &ast.Identifier{Token: p.curToken, Name: p.curToken.RawString}
 	identifiers = append(identifiers, ident)
 
 	for p.peekTokenIs(token.COMMA) {
 		//  后续参数
 		p.nextToken()
 		p.nextToken()
-		ident := &ast.Identifier{Token: p.curToken, Name: p.curToken.Literal}
+		ident := &ast.Identifier{Token: p.curToken, Name: p.curToken.RawString}
 		identifiers = append(identifiers, ident)
 	}
 
@@ -560,11 +561,11 @@ func (p *Parser) parseFormalParams() []*ast.Identifier {
 // 这个处理函数中，名字碰巧有 infix
 func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	nestLevel++
-	fmt.Printf("%sInfix >> curToken=%q\n", leading(), p.curToken)
+	// fmt.Printf("%sInfix >> curToken=%q\n", leading(), p.curToken)
 
 	expression := &ast.InfixExpression{
 		Token:    p.curToken,
-		Operator: p.curToken.Literal,
+		Operator: p.curToken.RawString,
 		Left:     left,
 	}
 
@@ -578,7 +579,7 @@ func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
 	// 把 + 的优先级传入，后续会和 * 的优先级比较
 	expression.Right = p.parseExpression(precedure)
 
-	fmt.Printf("%sInfix << curToken=%q\n", leading(), p.curToken)
+	// fmt.Printf("%sInfix << curToken=%q\n", leading(), p.curToken)
 	nestLevel--
 
 	return expression
@@ -641,4 +642,33 @@ func (p *Parser) parseIfExpression() ast.Expression {
 	}
 
 	return expr
+}
+
+func (p *Parser) parseHashLiteral() ast.Expression {
+	hash := &ast.HashLiteral{Token: p.curToken}
+	hash.Pairs = make(map[ast.Expression]ast.Expression)
+
+	for !p.peekTokenIs(token.RBRACE) {
+		p.nextToken()
+		key := p.parseExpression(LOWEST)
+
+		if !p.expectPeek(token.COLON) {
+			return nil
+		}
+
+		p.nextToken()
+		value := p.parseExpression(LOWEST)
+
+		hash.Pairs[key] = value
+
+		if !p.peekTokenIs(token.RBRACE) && !p.expectPeek(token.COMMA) {
+			return nil
+		}
+	}
+
+	if !p.expectPeek(token.RBRACE) {
+		return nil
+	}
+
+	return hash
 }
